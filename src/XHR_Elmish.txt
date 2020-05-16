@@ -1,0 +1,86 @@
+module App
+
+open Browser
+open Browser.Types
+open Elmish
+open Elmish.React
+open Feliz
+
+type Request =
+    { url: string
+      method: string
+      body: string }
+
+type Response =
+    { statusCode: int
+      body: string }
+
+let httpRequest request responseHandler =
+    let command dispatch =
+        let xhr = XMLHttpRequest.Create()
+        xhr.``open`` (method = request.method, url = request.url)
+        xhr.onreadystatechange <-
+            fun _ ->
+                if xhr.readyState = ReadyState.Done then
+                    let response =
+                        { statusCode = xhr.status
+                          body = xhr.responseText }
+
+                    let messageToDispatch = responseHandler response
+                    dispatch messageToDispatch
+        xhr.send (request.body)
+    Cmd.ofSub command
+
+
+type Deferred<'t> =
+    | HasNotStartedYet
+    | InProgress
+    | Resolved of 't
+
+type AsyncOperationStatus<'t> =
+    | Started
+    | Finished of 't
+
+type State =
+    { LoremIpsum: Deferred<Result<string, string>> }
+
+type Msg = LoadLoremIpsum of AsyncOperationStatus<Result<string, string>>
+
+let init() = { LoremIpsum = HasNotStartedYet }, Cmd.ofMsg (LoadLoremIpsum Started)
+
+let update msg state =
+    match msg with
+    | LoadLoremIpsum Started ->
+        let nextState = { state with LoremIpsum = InProgress }
+
+        let request =
+            { url = "/lorem-ipsums.txt"
+              method = "GET"
+              body = "" }
+
+        let responseMapper response =
+            if response.statusCode = 200
+            then LoadLoremIpsum(Finished(Ok response.body))
+            else LoadLoremIpsum(Finished(Error "Could not load the content"))
+
+        nextState, httpRequest request responseMapper
+    | LoadLoremIpsum(Finished result) ->
+        let nextState = { state with LoremIpsum = Resolved result }
+        nextState, Cmd.none
+
+let render state dispatch =
+    match state.LoremIpsum with
+    | HasNotStartedYet -> Html.none
+    | InProgress -> Html.div "Loading..."
+    | Resolved(Ok content) ->
+        Html.div
+            [ prop.style [ style.color.green ]
+              prop.text content ]
+    | Resolved(Error errorMsg) ->
+        Html.div
+            [ prop.style [ style.color.red ]
+              prop.text errorMsg ]
+
+Program.mkProgram init update render
+|> Program.withReactSynchronous "elmish-app"
+|> Program.run

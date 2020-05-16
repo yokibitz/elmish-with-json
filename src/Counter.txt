@@ -1,0 +1,68 @@
+module Test
+
+open Elmish
+open Elmish.React
+open Feliz
+
+type State =
+    { Count: int }
+
+type Msg =
+    | Increment
+    | Decrement
+
+let init() = { Count = 0 }
+
+let update (msg: Msg) (state: State): State =
+    match msg with
+    | Increment -> { state with Count = state.Count + 1 }
+    | Decrement -> { state with Count = state.Count - 1 }
+
+let power x n = List.replicate n x |> List.fold (*) 1
+
+// let renderUserIcon user =
+//     match user with
+//     | Some loggedInUser ->
+//         Html.div [
+//             renderUserImage loggedInUser
+//             renderLogoutButton loggedInUser
+//         ]
+//     | None ->
+//         renderSignInButton
+
+let counter (state: State) (dispatch: Msg -> unit) =
+    let headerText =
+        if state.Count % 2 = 0 then "Count is even" else "Count is odd"
+
+    let oddOrEvenMessage =
+        Html.h1
+            [ prop.className [ state.Count < 0, "hidden" ]
+              prop.text headerText ]
+
+    Html.div
+        [ Html.button
+            [ prop.onClick (fun _ -> dispatch Increment)
+              prop.text "Increment"
+              prop.className [ "button"; "is-primary" ] ]
+          Html.button
+              [ prop.onClick (fun _ -> dispatch Decrement)
+                prop.text "Decrement"
+                prop.className [ "button"; "is-primary" ] ]
+          Html.h1 state.Count
+          oddOrEvenMessage ]
+
+let fromCssHidden =
+    Html.div
+        [ prop.className "hidden"
+          prop.text "You can't see me" ]
+
+let fromCssShinyRed =
+    Html.div
+        [ prop.className [ "shiny"; "text-large" ]
+          prop.text "Large red text" ]
+
+let render (state: State) (dispatch: Msg -> unit) = counter state dispatch
+
+Program.mkSimple init update render
+|> Program.withReactSynchronous "elmish-app"
+|> Program.run

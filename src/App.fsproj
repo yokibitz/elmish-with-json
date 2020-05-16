@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="ApplicationStyles.fs" />
+    <Compile Include="Extensions.fs" />
+    <Compile Include="App.fs" />
+    <None Include="Counter.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Fable.Browser.XMLHttpRequest" Version="1.1.0" />
+    <PackageReference Include="Fable.Elmish.React" Version="3.0.1" />
+    <PackageReference Include="Fable.SimpleHttp" Version="3.0.0" />
+    <PackageReference Include="Feliz" Version="0.68.10" />
+    <PackageReference Include="Thoth.Json" Version="4.0.0" />
+    <PackageReference Include="Zanaptak.TypedCssClasses" Version="0.2.0" />
+  </ItemGroup>
+</Project>

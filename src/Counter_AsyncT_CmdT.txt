@@ -1,0 +1,85 @@
+module App
+
+open Elmish
+open Elmish.React
+open Feliz
+
+module Cmd =
+    let fromAsync operation =
+        let delayedCmd dispatch =
+            let delayedDispatch =
+                async {
+                    let! msg = operation
+                    dispatch msg }
+
+            Async.StartImmediate delayedDispatch
+
+        Cmd.ofSub delayedCmd
+
+type State =
+    { Count: int
+      Loading: bool }
+
+type Msg =
+    | Increment
+    | Decrement
+    | IncrementDelayed
+    | DecrementDelayed
+
+let init() =
+    { Count = 0
+      Loading = false }, Cmd.none
+
+
+
+let delayedMsg delay msg =
+    let delay =
+        async {
+            do! Async.Sleep delay
+            return msg
+        }
+
+    Cmd.fromAsync delay
+
+let update msg state =
+    match msg with
+    | Increment ->
+        { state with
+              Loading = false
+              Count = state.Count + 1 }, Cmd.none
+    | Decrement ->
+        { state with
+              Loading = false
+              Count = state.Count - 1 }, Cmd.none
+    | IncrementDelayed when state.Loading -> state, Cmd.none
+    | IncrementDelayed -> { state with Loading = true }, delayedMsg 1000 Increment
+    | DecrementDelayed -> { state with Loading = true }, delayedMsg 1000 Decrement
+
+let render state dispatch =
+    let content =
+        if state.Loading then Html.h1 "LOADING..." else Html.h1 state.Count
+
+    Html.div
+        [ Html.button
+            [ prop.onClick (fun _ -> dispatch Increment)
+              prop.text "Increment" ]
+
+          Html.button
+              [ prop.onClick (fun _ -> dispatch Decrement)
+                prop.text "Decrement" ]
+
+          Html.button
+              [ prop.disabled state.Loading
+                prop.onClick (fun _ -> dispatch IncrementDelayed)
+                prop.text "Increment Delayed" ]
+
+          Html.button
+              [ prop.disabled state.Loading
+                prop.onClick (fun _ -> dispatch DecrementDelayed)
+                prop.text "Decrement Delayed" ]
+
+          content ]
+
+Program.mkProgram init update render
+|> Program.withReactSynchronous "elmish-app"
+|> Program.run

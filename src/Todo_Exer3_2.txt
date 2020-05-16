@@ -1,0 +1,246 @@
+module App
+
+open Elmish
+open Elmish.React
+open Feliz
+
+type Todo =
+    { Id: int
+      Description: string
+      Completed: bool
+      BeingEdited: bool
+      EditDescription: string }
+
+type Filter =
+    | All
+    | Completed
+    | NotCompleted
+
+type State =
+    { TodoList: Todo list
+      NewTodo: string
+      SelectedFilter: Filter }
+
+type Msg =
+    | SetNewTodo of string
+    | AddNewTodo
+    | ToggleConpleted of int
+    | DeleteTodo of int
+    | CancelEdit of int
+    | ApplyEdit of int
+    | StartEditingTodo of int
+    | SetEditedDescription of int * string
+    | SetFilter of Filter
+
+let init() =
+    { TodoList =
+          [ { Id = 1
+              Description = "Learn F#"
+              Completed = true
+              BeingEdited = false
+              EditDescription = "" }
+            { Id = 2
+              Description = "Learn Elmish"
+              Completed = true
+              BeingEdited = false
+              EditDescription = "" } ]
+      NewTodo = ""
+      SelectedFilter = All }
+
+let update msg state =
+    match msg with
+    | SetNewTodo todoText -> { state with NewTodo = todoText }
+    | DeleteTodo todoId ->
+        let nextTodoList = state.TodoList |> List.filter (fun todo -> todo.Id <> todoId)
+        { state with TodoList = nextTodoList }
+    | ToggleConpleted todoId ->
+        let nextTodoList =
+            state.TodoList
+            |> List.map (fun todo ->
+                if todo.Id = todoId
+                then { todo with Completed = not todo.Completed }
+                else todo)
+        { state with TodoList = nextTodoList }
+    | AddNewTodo when state.NewTodo = "" -> state
+    | AddNewTodo ->
+        let nextTodoId =
+            match state.TodoList with
+            | [] -> 1
+            | elems ->
+                elems
+                |> List.maxBy (fun todo -> todo.Id)
+                |> fun todo -> todo.Id + 1
+
+        let nextTodo =
+            { Id = nextTodoId
+              Description = state.NewTodo
+              Completed = false
+              BeingEdited = false
+              EditDescription = "" }
+
+        { state with
+              NewTodo = ""
+              TodoList = List.append state.TodoList [ nextTodo ] }
+    | StartEditingTodo todoId ->
+        let nextTodoList =
+            state.TodoList
+            |> List.map (fun todo ->
+                if todo.Id = todoId then
+                    { todo with
+                          BeingEdited = true
+                          EditDescription = todo.Description }
+                else
+                    todo)
+        { state with TodoList = nextTodoList }
+    | CancelEdit todoId ->
+        let nextTodoList =
+            state.TodoList
+            |> List.map (fun todo ->
+                if todo.Id = todoId then
+                    { todo with
+                          BeingEdited = false
+                          EditDescription = "" }
+                else
+                    todo)
+        { state with TodoList = nextTodoList }
+    | ApplyEdit todoId ->
+        let nextTodoList =
+            state.TodoList
+            |> List.map (fun todo ->
+                if todo.Id = todoId then
+                    { todo with
+                          BeingEdited = false
+                          Description = todo.EditDescription
+                          EditDescription = "" }
+                else
+                    todo)
+        { state with TodoList = nextTodoList }
+    | SetEditedDescription(todoId, newText) ->
+        let nextTodoList =
+            state.TodoList
+            |> List.map (fun todo ->
+                if todo.Id = todoId then { todo with EditDescription = newText } else todo)
+        { state with TodoList = nextTodoList }
+    | SetFilter nextFilter -> { state with SelectedFilter = nextFilter }
+
+let appTitle =
+    Html.p
+        [ prop.className "title"
+          prop.text "Elmish To-Do List" ]
+
+let inputField state dispatch =
+    Html.div
+        [ prop.classes [ "field"; "has-addons" ]
+          prop.children
+              [ Html.div
+                  [ prop.classes [ "control"; "is-expanded" ]
+                    prop.children
+                        [ Html.input
+                            [ prop.classes [ "input"; "is-medium" ]
+                              prop.valueOrDefault state.NewTodo
+                              prop.onChange (SetNewTodo >> dispatch) ] ] ]
+
+                Html.div
+                    [ prop.className "control"
+                      prop.children
+                          [ Html.button
+                              [ prop.classes [ "button"; "is-primary"; "is-medium" ]
+                                prop.onClick (fun _ -> dispatch AddNewTodo)
+                                prop.children [ Html.i [ prop.classes [ "fa"; "fa-plus" ] ] ] ] ] ] ] ]
+
+let div classes (children: Fable.React.ReactElement list) =
+    Html.div
+        [ prop.classes classes
+          prop.children children ]
+
+let renderFilterTabs (state: State) (dispatch: Msg -> unit) =
+    div [ "tabs"; "is-toggle"; "is-fullwidth" ]
+        [ Html.ul
+            [ Html.li
+                [ prop.className [ state.SelectedFilter = All, "is-active" ]
+                  prop.children [ Html.anchor [ prop.text "All" ] ]
+                  prop.onClick (fun _ -> dispatch (SetFilter All)) ]
+
+              Html.li
+                  [ prop.children [ Html.anchor [ prop.text "Completed" ] ]
+                    prop.className [ state.SelectedFilter = Completed, "is-active" ]
+                    prop.onClick (fun _ -> dispatch (SetFilter Completed)) ]
+
+              Html.li
+                  [ prop.children [ Html.anchor [ prop.text "Not Completed" ] ]
+                    prop.className [ state.SelectedFilter = NotCompleted, "is-active" ]
+                    prop.onClick (fun _ -> dispatch (SetFilter NotCompleted)) ] ] ]
+
+let renderEditForm (todoBeingEdited: Todo) dispatch =
+    div [ "box" ]
+        [ div [ "field"; "is-grouped" ]
+              [ div [ "control"; "is-expanded" ]
+                    [ Html.input
+                        [ prop.classes [ "input"; "is-medium" ]
+                          prop.valueOrDefault todoBeingEdited.Description
+                          prop.onTextChange
+                              (fun rawText -> dispatch (SetEditedDescription(todoBeingEdited.Id, rawText))) ] ]
+                div [ "control"; "buttons" ]
+                    [ Html.button
+                        [ prop.className
+                            [ true, "button"
+                              todoBeingEdited.Description <> todoBeingEdited.EditDescription, "is-primary"
+                              todoBeingEdited.Description = todoBeingEdited.EditDescription, "is-outlined" ]
+                          prop.onClick (fun _ -> dispatch (ApplyEdit todoBeingEdited.Id))
+                          prop.children [ Html.i [ prop.classes [ "fa"; "fa-save" ] ] ] ]
+                      Html.button
+                          [ prop.classes [ "button"; "is-warning" ]
+                            prop.onClick (fun _ -> dispatch (CancelEdit todoBeingEdited.Id))
+                            prop.children [ Html.i [ prop.classes [ "fa"; "fa-arrow-right" ] ] ] ] ] ] ]
+
+let renderTodo (todo: Todo) dispatch =
+    div [ "box" ]
+        [ div [ "columns"; "is-mobile"; "is-vcentered" ]
+              [ div [ "column" ]
+                    [ Html.p
+                        [ prop.className "subtitle"
+                          prop.text todo.Description ] ]
+
+                div [ "column"; "is-narrow" ]
+                    [ div [ "buttons" ]
+                          [ Html.button
+                              [ prop.className
+                                  [ true, "button"
+                                    todo.Completed, "is-success" ]
+                                prop.onClick (fun _ -> dispatch (ToggleConpleted todo.Id))
+                                prop.children [ Html.i [ prop.classes [ "fa"; "fa-check" ] ] ] ]
+
+                            Html.button
+                                [ prop.classes [ "button"; "is-primary" ]
+                                  prop.onClick (fun _ -> dispatch (StartEditingTodo todo.Id))
+                                  prop.children [ Html.i [ prop.classes [ "fa"; "fa-edit" ] ] ] ]
+
+                            Html.button
+                                [ prop.classes [ "button"; "is-danger" ]
+                                  prop.onClick (fun _ -> dispatch (DeleteTodo todo.Id))
+                                  prop.children [ Html.i [ prop.classes [ "fa"; "fa-times" ] ] ] ] ] ] ] ]
+
+
+let todoList state dispatch =
+    Html.ul
+        [ prop.children
+            [ let filteredList =
+                if state.SelectedFilter = All
+                then state.TodoList
+                else state.TodoList |> List.filter (fun t -> t.Completed = (state.SelectedFilter = Completed))
+
+              for todo in filteredList ->
+                  if todo.BeingEdited then renderEditForm todo dispatch else renderTodo todo dispatch ] ]
+
+let render state dispatch =
+    Html.div
+        [ prop.style [ style.padding 20 ]
+          prop.children
+              [ appTitle
+                inputField state dispatch
+                renderFilterTabs state dispatch
+                todoList state dispatch ] ]
+
+Program.mkSimple init update render
+|> Program.withReactSynchronous "elmish-app"
+|> Program.run

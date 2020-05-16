@@ -1,0 +1,113 @@
+module App
+
+open Browser
+open Browser.Types
+open Elmish
+open Elmish.React
+open Feliz
+open Fable.SimpleHttp
+
+module Cmd =
+    let fromAsync operation =
+        let delayedCmd dispatch =
+            let delayedDispatch =
+                async {
+                    let! msg = operation
+                    dispatch msg }
+
+            Async.StartImmediate delayedDispatch
+
+        Cmd.ofSub delayedCmd
+
+// let wait timeout =
+//     Async.FromContinuations <| fun (resolve, reject, _) -> window.setTimeout ((fun _ -> resolve()), timeout) |> ignore
+
+// async {
+//     do! wait 1000
+//     printfn "One"
+//     do! wait 1000
+//     printfn "Two"
+//     do! wait 1000
+//     printfn "Three"
+//     do! wait 1000
+//     printfn "Four"
+//     do! wait 1000
+//     printfn "Five"
+// }
+// |> Async.StartImmediate
+
+// type Request =
+//     { url: string
+//       method: string
+//       body: string }
+
+// type Response =
+//     { statusCode: int
+//       body: string }
+
+// let httpRequest request =
+//     Async.FromContinuations <| fun (resolve, reject, _) ->
+//         let xhr = XMLHttpRequest.Create()
+//         xhr.``open`` (method = request.method, url = request.url)
+//         xhr.onreadystatechange <-
+//             fun _ ->
+//                 if xhr.readyState = ReadyState.Done then
+//                     let response =
+//                         { statusCode = xhr.status
+//                           body = xhr.responseText }
+//                     resolve response
+//         xhr.send (request.body)
+
+type Deferred<'t> =
+    | HasNotStartedYet
+    | InProgress
+    | Resolved of 't
+
+type AsyncOperationStatus<'t> =
+    | Started
+    | Finished of 't
+
+type State =
+    { LoremIpsum: Deferred<Result<string, string>> }
+
+type Msg = LoadLoremIpsum of AsyncOperationStatus<Result<string, string>>
+
+let init() = { LoremIpsum = HasNotStartedYet }, Cmd.ofMsg (LoadLoremIpsum Started)
+
+let update msg state =
+    match msg with
+    | LoadLoremIpsum Started ->
+        let nextState = { state with LoremIpsum = InProgress }
+
+        let loadLoremIpsum =
+            async {
+                let! response = Http.request "/lorem-ipsum.txt"
+                                |> Http.method GET
+                                |> Http.send
+
+                if response.statusCode = 200
+                then return LoadLoremIpsum(Finished(Ok response.responseText))
+                else return LoadLoremIpsum(Finished(Error "Could not load the content"))
+            }
+        nextState, Cmd.fromAsync loadLoremIpsum
+    | LoadLoremIpsum(Finished result) ->
+        let nextState = { state with LoremIpsum = Resolved result }
+        nextState, Cmd.none
+
+let render state dispatch =
+    match state.LoremIpsum with
+    | HasNotStartedYet -> Html.none
+    | InProgress -> Html.div "Loading..."
+    | Resolved(Ok content) ->
+        Html.div
+            [ prop.style [ style.color.green ]
+              prop.text content ]
+    | Resolved(Error errorMsg) ->
+        Html.div
+            [ prop.style [ style.color.red ]
+              prop.text errorMsg ]
+
+
+Program.mkProgram init update render
+|> Program.withReactSynchronous "elmish-app"
+|> Program.run
